@@ -225,7 +225,7 @@ class Controller:
                 continue
             base = {f.name: getattr(books[i], f.name) for f in fields(Snapshot)}
             snap = PositionSnapshot(**base, target_position=targets[i],
-                                    account_ok=account_ok, risk_exit=aggressive[i])
+                                    account_ok=bool(account_ok), risk_exit=bool(aggressive[i]))
             output.append(Decision(i, targets[i], reasons[i], features[i], snap, tuple(decide(snap, c))))
         return output
 

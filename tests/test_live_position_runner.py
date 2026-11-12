@@ -1,4 +1,5 @@
 import contextlib
+from decimal import Decimal
 from datetime import datetime, timezone
 import io
 import json
@@ -8,7 +9,7 @@ from types import SimpleNamespace as NS
 import unittest
 
 from optiver_bot.live_position_runner import (
-    ApiError, Limiter, LiveAdapter, age_seconds, cloud_preflight, main, strategy, error_location,
+    ApiError, Limiter, LiveAdapter, age_seconds, cloud_preflight, main, strategy, error_location, json_default,
 )
 from optiver_bot.models import DesiredOrder
 
@@ -95,6 +96,23 @@ def adapter(fake, cfg=None):
 
 
 class AdapterTests(unittest.TestCase):
+    def test_decimal_tick_is_normalized_before_signals_and_logging(self):
+        f = Fake()
+        f.get_instruments = lambda: {'A': NS(tick_size=Decimal('0.1'), instrument_type='STOCK')}
+        a = adapter(f)
+        account = a.read('A')
+        self.assertIs(type(account.book.tick_size), float)
+        self.assertTrue(strategy.valid_book(account.book, config()))
+
+    def test_telemetry_handles_decimal_and_sdk_boolean_scalars(self):
+        class SDKBoolean:
+            def item(self):
+                return True
+        encoded = json.dumps({'tick': Decimal('0.1'), 'exit': SDKBoolean()}, default=json_default)
+        self.assertEqual(json.loads(encoded), {'tick': .1, 'exit': True})
+        with self.assertRaises(TypeError):
+            json.dumps({'unknown': object()}, default=json_default)
+
     def test_book_timestamps_and_actual_fills(self):
         f = Fake()
         a = adapter(f)

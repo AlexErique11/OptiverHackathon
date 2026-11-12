@@ -8,6 +8,8 @@ import argparse
 from collections import deque
 from dataclasses import asdict
 from datetime import datetime, timezone
+from decimal import Decimal
+from enum import Enum
 from hashlib import sha256
 from importlib import import_module
 import json
@@ -40,7 +42,26 @@ def error_location(exc):
     if not frames:
         return type(exc).__name__
     frame = frames[-1]
-    return f'{type(exc).__name__} at {Path(frame.filename).name}:{frame.lineno} ({frame.name})'
+    local = [f for f in frames if Path(f.filename).resolve().is_relative_to(Path(__file__).resolve().parent)]
+    origin = local[-1] if local else frame
+    return (f'{type(exc).__name__} at {Path(origin.filename).name}:{origin.lineno} ({origin.name})'
+            + (f' -> {Path(frame.filename).name}:{frame.lineno}' if origin != frame else ''))
+
+
+def json_default(value):
+    """Normalize telemetry scalars without stringifying arbitrary SDK objects."""
+    if isinstance(value, Decimal):
+        if not value.is_finite():
+            raise TypeError('Nonfinite telemetry scalar')
+        return float(value)
+    if isinstance(value, Enum):
+        return value.value
+    item = getattr(value, 'item', None)
+    if callable(item):
+        scalar = item()
+        if type(scalar) in (bool, int, float, str):
+            return scalar
+    raise TypeError('Unsupported telemetry scalar')
 
 
 class Limiter:
@@ -238,7 +259,7 @@ class LiveAdapter:
         if book is None:
             raise ApiError('Missing book')
         bids, asks = levels(book.bids), levels(book.asks)
-        tick = self.meta[i].tick_size
+        tick = float(self.meta[i].tick_size)
         def clean(ls, side):
             quantities = {p: sum(v for pp, v in ls if pp == p) for p, _ in ls}
             for r in orders:
@@ -427,7 +448,7 @@ def flatten_loop(adapter, cfg, live, deadline, clock, sleep, path, max_frames=No
                 else:
                     outcomes[i] = 'preview_only'
             log.write(json.dumps(dict(kind='flatten', positions=remaining, outcomes=outcomes,
-                                      equity=adapter.equity()))+'\n')
+                                      equity=adapter.equity()), default=json_default)+'\n')
             log.flush()
             if rounds % 5 == 0 or not live:
                 print('Remaining positions:', remaining, outcomes)
@@ -545,7 +566,7 @@ def main(argv=None, *, exchange_factory=None, clock=time.monotonic,
             log.write(json.dumps(dict(kind='settings', config=asdict(cfg), references=refs,
                                       live=args.live, instruments=ids, duration=args.duration_seconds,
                                       starting_equity=adapter.initial_equity,
-                                      starting_positions=adapter.initial))+'\n')
+                                      starting_positions=adapter.initial), default=json_default)+'\n')
             while clock() < deadline and (max_frames is None or frames < max_frames):
                 begin = clock()
                 if not limiter.call(raw.is_connected):
@@ -594,7 +615,7 @@ def main(argv=None, *, exchange_factory=None, clock=time.monotonic,
                     envelopes={i: adapter.envelope(i) for i in ids},
                     markouts=adapter.markouts.observe(now, {i: (b.bid+b.ask)/2 for i, b in books.items()
                         if strategy.valid_book(b, cfg)}))
-                log.write(json.dumps(row)+'\n')
+                log.write(json.dumps(row, default=json_default)+'\n')
                 log.flush()
                 if frames % 5 == 0:
                     print(f'{now-start:.0f}s PnL={equity:.2f} change={equity-adapter.initial_equity:+.2f}',
