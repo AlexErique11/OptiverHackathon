@@ -183,6 +183,9 @@ class Controller:
         self.adapter,self.target_raw,self.deadline,self.clock,self.logger=adapter,target_raw,deadline,clock,logger
         self.state={}
 
+    def direction(self,iid,history,now,c,tick):
+        return signal_direction(history,now,c,tick)
+
     def __call__(self,snap,c):
         bids=[p for p,v in snap.bids if v>0];asks=[p for p,v in snap.asks if v>0]
         if not bids or not asks:return []
@@ -200,7 +203,7 @@ class Controller:
                 if shock:s['pause']=now+c.cooldown
         while len(history)>1 and history[1][0]<=now-c.lookback:history.popleft()
         history.append((now,mid))
-        direction=signal_direction(history,now,c,snap.tick_size)
+        direction=self.direction(iid,history,now,c,snap.tick_size)
         if not snap.position:
             if s['position']:
                 s['flat_at']=now;s['target']=0
@@ -239,7 +242,7 @@ class Controller:
         return orders
 
 
-def main(argv=None,exchange_factory=None):
+def main(argv=None,exchange_factory=None,controller_factory=Controller):
     p=argparse.ArgumentParser(description=__doc__);sub=p.add_subparsers(dest='command')
     sub.add_parser('demo');run=sub.add_parser('run',help='one connection; orders dry-run unless --live')
     run.add_argument('--live',action='store_true');run.add_argument('--cap',type=int,default=100)
@@ -275,7 +278,7 @@ def main(argv=None,exchange_factory=None):
     print('Target',c.target,'per stock; stop other bots. No guaranteed profit or fill.')
     with (directory/f'target10_{stamp}.jsonl').open('w') as events:
         def logger(event):events.write(json.dumps(event)+'\n');events.flush()
-        controller=Controller(adapter,target_raw,deadline,logger=logger)
+        controller=controller_factory(adapter,target_raw,deadline,logger=logger)
         # Session deadline first drives targets to zero; final loop limit stops
         # requests even if a passive reduction has not filled. Inspect inventory.
         def limited_sleep(seconds):
