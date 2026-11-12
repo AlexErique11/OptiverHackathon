@@ -84,7 +84,7 @@ class Controller:
         # Require roughly one-second analysis frames; fast order handling is external.
         if self.last is not None and now - self.last < 0.99:
             raise ValueError('Supply at most one analysis frame per second')
-        gap = self.last is not None and now - self.last > 1.01
+        gap = self.last is not None and now - self.last > 2.5
         self.last = now
         if self.initial_equity is None:
             self.initial_equity = equity
@@ -114,16 +114,18 @@ class Controller:
         features = {}
         for i, h in self.history.items():
             c = self.cfg
-            if len(h) <= c.warmup:
+            if len(h) < 2 or h[-1][0]-h[0][0] < c.warmup:
                 features[i] = Features()
                 continue
-            prices = [p for _, p in h]
-            returns = [log(b / a) for a, b in zip(prices[-c.warmup-1:], prices[-c.warmup:])]
+            window = [(t, p) for t, p in h if t >= now-c.warmup-2.5]
+            returns = [log(b/a)/sqrt(tb-ta) for (ta, a), (tb, b) in zip(window, window[1:])]
             changes = sum(abs(r) > 1e-12 for r in returns)
+            fast = next((p for t, p in reversed(h) if t <= now-c.fast), None)
+            slow = next((p for t, p in reversed(h) if t <= now-c.slow), None)
             features[i] = Features(
-                ready=changes >= c.min_changes,
-                fast_return=log(prices[-1] / prices[-1-c.fast]),
-                slow_return=log(prices[-1] / prices[-1-c.slow]), sigma=pstdev(returns))
+                ready=changes >= c.min_changes and fast is not None and slow is not None,
+                fast_return=log(h[-1][1]/fast) if fast else 0,
+                slow_return=log(h[-1][1]/slow) if slow else 0, sigma=pstdev(returns))
         ready = [f for f in features.values() if f.ready]
         covered = len(ready) >= ceil(len(self.ids) * self.cfg.coverage)
         basket = sum(f.slow_return for f in ready) / len(ready) if ready else 0

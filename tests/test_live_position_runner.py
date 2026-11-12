@@ -1,0 +1,226 @@
+import contextlib
+from datetime import datetime, timezone
+import io
+import json
+from pathlib import Path
+import tempfile
+from types import SimpleNamespace as NS
+import unittest
+
+from optiver_bot.live_position_runner import (
+    ApiError, Limiter, LiveAdapter, age_seconds, cloud_preflight, main, strategy,
+)
+from optiver_bot.models import DesiredOrder
+
+
+class Fake:
+    def __init__(self):
+        self.now = 0.
+        self.pos = {'A': 0}
+        self.live = {}
+        self.trades = []
+        self.calls = []
+        self.fill = False
+        self.n = 0
+
+    def clock(self):
+        return self.now
+
+    def sleep(self, seconds):
+        self.now += seconds
+
+    def connect(self):
+        self.calls.append(('connect',))
+
+    def disconnect(self):
+        self.calls.append(('disconnect',))
+
+    def is_connected(self):
+        return True
+
+    def get_instruments(self):
+        return {'A': NS(tick_size=.1, instrument_type='STOCK')}
+
+    def get_positions(self):
+        return dict(self.pos)
+
+    def get_pnl(self):
+        return 0.
+
+    def get_outstanding_orders(self, i):
+        return dict(self.live)
+
+    def poll_new_trades(self, i):
+        trades, self.trades = self.trades, []
+        return trades
+
+    def poll_new_social_media_feeds(self):
+        return []
+
+    def get_last_price_book(self, i):
+        bid = round(100+self.now*.1, 1)
+        return NS(bids=[NS(price=bid, volume=100)], asks=[NS(price=round(bid+.1, 1), volume=100)],
+                  timestamp=datetime.fromtimestamp(1000000+self.now, timezone.utc))
+
+    def insert_order(self, i, *, price, volume, side, order_type):
+        self.n += 1
+        self.calls.append(('insert', side, price, volume, order_type))
+        if self.fill or order_type == 'ioc':
+            self.pos[i] += volume*(1 if side == 'bid' else -1)
+            self.trades.append(NS(price=price, volume=volume, side=side))
+        else:
+            self.live[self.n] = NS(price=price, volume=volume, side=side)
+        return NS(success=True, order_id=self.n)
+
+    def delete_order(self, i, order_id):
+        self.calls.append(('cancel', order_id))
+        self.live.pop(order_id, None)
+        return NS(success=True)
+
+
+def config(**kw):
+    return strategy.Config(round_trip_cost_ticks=.1, gross_limit=10000,
+                           position_cash_risk=10, loss_limit=50, **kw)
+
+
+def adapter(fake, cfg=None):
+    return LiveAdapter(fake, cfg or config(), ('A',),
+        Limiter(1000, clock=fake.clock, sleep=fake.sleep), 1,
+        fake.clock, lambda: 1000000+fake.now)
+
+
+class AdapterTests(unittest.TestCase):
+    def test_book_timestamps_and_actual_fills(self):
+        f = Fake()
+        a = adapter(f)
+        f.fill = True
+        a.read('A')
+        a.insert(DesiredOrder('A', 'bid', 100, 1), 't')
+        account = a.read('A')
+        self.assertTrue(account.certain)
+        self.assertEqual(account.book.position, 1)
+        self.assertEqual(a.cost_basis['A'], 100)
+        self.assertIn('t', account.resolved)
+        self.assertEqual(a.envelope('A'), (1, 1))
+
+    def test_cancellation_keeps_conservative_fill_envelope(self):
+        f = Fake()
+        a = adapter(f)
+        a.read('A')
+        a.insert(DesiredOrder('A', 'bid', 100, 1), 't')
+        account = a.read('A')
+        a.cancel('A', account.orders[0].order_id)
+        account = a.read('A')
+        self.assertFalse(account.orders)
+        self.assertEqual(a.envelope('A'), (0, 1))
+
+    def test_repeated_cancels_cannot_bypass_internal_or_hard_limit(self):
+        f = Fake()
+        a = adapter(f)
+        for n in range(10):
+            a.read('A')
+            a.insert(DesiredOrder('A', 'bid', 100, 1), str(n))
+            account = a.read('A')
+            a.cancel('A', account.orders[0].order_id)
+            a.read('A')
+        with self.assertRaises(ApiError):
+            a.insert(DesiredOrder('A', 'bid', 100, 1), 'excess')
+        self.assertEqual(len([c for c in f.calls if c[0] == 'insert']), 10)
+
+    def test_stale_book_never_inserts(self):
+        f = Fake()
+        a = adapter(f)
+        a.wall = lambda: 1000005
+        with self.assertRaises(ApiError):
+            a.insert(DesiredOrder('A', 'bid', 100, 1), 'x')
+        self.assertFalse(f.calls)
+
+    def test_unknown_response_keeps_backstop_reservation(self):
+        f = Fake()
+        a = adapter(f)
+        def unknown(*args, **kwargs):
+            raise TimeoutError()
+        f.insert_order = unknown
+        with self.assertRaises(TimeoutError):
+            a.insert(DesiredOrder('A', 'bid', 100, 1), 'x')
+        self.assertEqual(a.envelope('A'), (0, 1))
+        self.assertNotIn('x', a.resolved)
+
+    def test_existing_orders_and_unselected_inventory_refuse_takeover(self):
+        for mode in ('orders', 'inventory'):
+            f = Fake()
+            if mode == 'orders':
+                f.live[1] = NS(side='bid', price=100, volume=1)
+            else:
+                f.pos['OTHER'] = 1
+            with self.assertRaises(ApiError):
+                adapter(f)
+
+    def test_limiter_counts_actual_calls(self):
+        f = Fake()
+        limit = Limiter(2, clock=f.clock, sleep=f.sleep)
+        for _ in range(3):
+            limit.call(f.get_pnl)
+        self.assertGreaterEqual(f.now, 1.)
+
+    def test_bad_timestamps_fail_closed(self):
+        for ts in (None, 1000001):
+            with self.assertRaises(ApiError):
+                age_seconds(ts, 1000000)
+
+    def test_reference_preflight_reads_without_exposing_contents(self):
+        with tempfile.TemporaryDirectory(dir='results/test-temp') as d:
+            root = Path(d)
+            with self.assertRaises(ValueError):
+                cloud_preflight(root)
+            for name in ('AGENTS.md', 'api_reference.md'):
+                (root/name).write_text('private reference text')
+            result = cloud_preflight(root)
+            self.assertEqual(len(result['AGENTS.md']), 64)
+            self.assertNotIn('private', str(result))
+
+
+class RunnerTests(unittest.TestCase):
+    def run_fake(self, live):
+        f = Fake()
+        f.fill = True
+        with tempfile.TemporaryDirectory(dir='results/test-temp') as d:
+            args = ['run', '--instruments', 'A', '--duration-seconds', '300',
+                    '--cost-ticks', '.1', '--max-requests', '1000', '--max-order-size', '1',
+                    '--gross-limit', '10000', '--cash-risk', '10', '--loss-limit', '50',
+                    '--log-dir', d]
+            if live:
+                args.append('--live')
+            factory_calls = []
+            def factory():
+                factory_calls.append(1)
+                return f
+            with contextlib.redirect_stdout(io.StringIO()):
+                code = main(args, exchange_factory=factory, clock=f.clock, sleep=f.sleep,
+                            wall=lambda: 1000000+f.now, preflight=lambda: {}, max_frames=40)
+            rows = [json.loads(line) for p in Path(d).glob('*.jsonl') for line in p.read_text().splitlines()]
+        self.assertEqual(code, 0)
+        self.assertEqual(len(factory_calls), 1)
+        self.assertEqual(f.calls.count(('connect',)), 1)
+        self.assertEqual(f.calls.count(('disconnect',)), 1)
+        return f, rows
+
+    def test_shadow_has_no_order_mutations(self):
+        f, rows = self.run_fake(False)
+        self.assertFalse(any(c[0] in ('insert', 'cancel') for c in f.calls))
+        self.assertTrue(any(d['target'] for r in rows if r.get('kind') == 'frame' for d in r['decisions']))
+
+    def test_live_opens_target_and_tracks_actual_fill_basis(self):
+        f, rows = self.run_fake(True)
+        inserts = [c for c in f.calls if c[0] == 'insert']
+        self.assertTrue(inserts)
+        self.assertLessEqual(max(abs(r['books']['A']['position']) for r in rows if r.get('kind') == 'frame'), 10)
+        self.assertTrue(any(r.get('entry_prices') for r in rows))
+
+    def test_invalid_startup_never_constructs_exchange(self):
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            main(['run'], exchange_factory=lambda: self.fail('connected'))
+
+
+if __name__ == '__main__':
+    unittest.main()

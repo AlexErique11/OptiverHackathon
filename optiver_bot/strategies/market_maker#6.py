@@ -1,4 +1,9 @@
-"""Strategy #6: pure position-target rules supplied by the one execution owner."""
+"""Strategy #6. Run this .py file with --help for deployment commands."""
+# Direct script invocation must resolve the repository package, not the current cwd.
+if __name__ == '__main__' and not __package__:
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from dataclasses import dataclass
 from math import isfinite, sqrt
 
@@ -152,3 +157,8 @@ def decide(snapshot: PositionSnapshot, config: Config) -> list[DesiredOrder]:
     price = round_price(price, s.tick_size, up=side == 'ask')
     return [DesiredOrder(s.instrument_id, side, price, volume,
                          'ioc' if reducing and s.risk_exit else 'limit')]
+
+
+if __name__ == '__main__':
+    from optiver_bot.live_position_runner import main
+    raise SystemExit(main())

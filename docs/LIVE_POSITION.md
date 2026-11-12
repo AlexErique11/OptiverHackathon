@@ -4,9 +4,76 @@ Canonical strategy file: `optiver_bot/strategies/market_maker#6.py`. Controller,
 execution and replay entry points keep their existing names. Numbered strategy
 modules are loaded with importlib because '#' cannot appear in an import statement.
 
-Implementation branch: `codex/live-position-strategy`. Existing strategies are
-unchanged. No exchange connection is opened by any new module, including imports,
-demo and replay. This candidate has not been deployed or shown profitable.
+The deployable runner is `optiver_bot/live_position_runner.py`. Existing strategies
+are unchanged. Imports, demo and replay never connect. `run` opens ONE connection
+for shadow inference; only `run --live` submits/cancels orders. This candidate has
+been tested against a fake client, not deployed or shown profitable on Optibook.
+
+Deployment in the supplied cloud terminal, from the repository root:
+
+```bash
+/opt/venv/bin/python 'optiver_bot/strategies/market_maker#6.py' --help
+/opt/venv/bin/python 'optiver_bot/strategies/market_maker#6.py' demo
+```
+
+Read `/home/workspace/AGENTS.md`, `/home/workspace/api_reference.md` and the unlocked
+challenge rules first. Confirm method/response fields against the supplied client.
+The startup preflight reads/hashes the two supplied reference files without printing
+their contents; it checks their presence, NOT that event semantics were reviewed.
+Stop the previous team bot before connecting even in shadow mode. Existing orders
+at startup or inventory outside the selected universe refuse takeover. Selected
+inherited inventory is reduction-only; it is not given a fabricated cost basis.
+
+Set these shell variables to confirmed event settings and chosen cash-risk budgets
+(no example value here is an event rule). `DURATION_SECONDS` is the time REMAINING,
+not an extra twenty minutes when the session is already underway. Request limits
+include every raw API call across all instruments, and REQUEST_WINDOW is in seconds.
+
+```bash
+/opt/venv/bin/python 'optiver_bot/strategies/market_maker#6.py' run \
+  --instruments "${STOCK_IDS:?set comma-separated confirmed stock IDs}" \
+  --duration-seconds "${DURATION_SECONDS:?set remaining session seconds}" \
+  --cost-ticks "${COST_TICKS:?set conservative round-trip costs in ticks}" \
+  --max-requests "${MAX_REQUESTS:?set verified team-wide request budget}" \
+  --request-window "${REQUEST_WINDOW:?set budget window seconds}" \
+  --max-order-size "${MAX_ORDER_SIZE:?set verified maximum order quantity}" \
+  --gross-limit "${GROSS_LIMIT:?set portfolio gross-notional budget}" \
+  --cash-risk "${CASH_RISK:?set per-position cash-risk allowance}" \
+  --loss-limit "${LOSS_LIMIT:?set session loss allowance}"
+```
+
+That command uses real data but sends NO orders. For live trading, stop shadow mode
+and rerun the same command with `--live`. There is no automatic switch to live.
+Optional sizing flags: `--cap 10 --target 3 --clip 1` (defaults), and `--max-age 1`.
+Never set cap above 100. Costs must include the intended conservative spread,
+fees and slippage budget; use a worst-case scalar across selected stocks or choose
+a smaller universe if their costs differ materially. Keep logs under logs/ or
+results/. Python -m optiver_bot.live_position_runner accepts the same arguments.
+
+The full sampling sweep currently uses roughly six raw reads per instrument plus
+connection/PnL/news reads, and extra reads around actual order changes. All are
+rate-limited. If this exceeds the verified budget, frames slow down; gaps over
+2.5 seconds reset warm-up and stale stocks cannot support new entries. Select a
+smaller confirmed stock universe instead of exceeding the request allowance or
+discarding risk checks. Irregular valid observations use actual elapsed time,
+time-based return windows and volatility normalized per square-root second.
+
+The independent lifetime reservation backstop counts every submitted quantity
+until confirmed opposite fills replenish capacity. Cancellation alone does NOT
+release that backstop capacity, even after the normal order ledger reconciles.
+Repeated unfilled replacements can therefore exhaust the small internal cap and
+stop new entries. This deliberate conservative limitation is logged via envelopes;
+do not restart merely to bypass it while any order outcome is uncertain. A rejected
+or changed-book insertion may also conservatively consume backstop room. Unknown
+insert outcomes remain blocked; never retry them blindly.
+
+The runner logs normalized market frames, actual fills and cost bases, decisions,
+execution outcomes, risk envelopes and markouts to ignored logs/strategy6/. Logs
+can be passed to live_position_replay (the settings header is skipped). JSON output
+never includes credentials or raw client exceptions. Ctrl+C/SIGTERM, failure and
+normal exit attempt to cancel orders and disconnect. Cancelling/disconnecting does
+NOT guarantee liquidation; wind-down works reductions before the deadline and
+remaining inventory must be inspected. This runner never starts a second connector.
 
 The deterministic entry hypothesis is persistent same-direction 5-second and
 20-second stock returns, matching basket direction, breadth at least 0.625,
@@ -18,7 +85,7 @@ edge. Prices must be fresh, valid and within the configured spread threshold.
 Default targets are three lots, one-lot clips, internal cap ten. The controller
 uses up to 121 one-second observations per stock. Warm-up needs thirty valid
 return intervals, at least ten changed intervals and 75% basket coverage. A gap
-over the one-second sampling tolerance or stale data resets affected history;
+over 2.5 seconds or stale data resets affected history;
 missing information never becomes a zero return. All thresholds are unvalidated
 test settings. Feed/market faults disable new entries. Costs, gross notional,
 position cash-risk and loss limit must be configured before any entry.
@@ -86,13 +153,15 @@ multiple actual API requests, the adapter must charge the additional calls too.
 Reserve request capacity for risk management. Token identities must be unique
 within the adapter session; reconstruct outstanding/reservations before restart.
 
-No actual cloud adapter has been provided: the unlocked challenge brief and
-/home/workspace/api_reference.md are unavailable locally. Read those and
-/home/workspace/AGENTS.md before client integration. Do not plug this into #1/#4's
-runner unchanged: it discards timestamps, uses old positions after cancellation
-and does not implement this coherent revision/reservation contract. No second
-connector should be introduced. Use the existing single owner and centrally poll
-poll_new_social_media_feeds(); verify message fields and consumption semantics.
+The cloud adapter is `live_position_runner.LiveAdapter`. It preserves timestamps,
+tracks incremental own fills and actual fill cost bases, reconciles fresh position/
+order reads and uses the independent lifetime reservation backstop above. It
+rejects unsupported schema instead of guessing success. Unknown feed metadata
+is not interpreted as sentiment: posts trigger scoped or basket caution only.
+Do not attach #1/#4 unchanged or run their connectors alongside this runner. The
+supplied cloud reference and unlocked challenge brief remain unavailable on this
+Windows machine; actual environment/schema compatibility must be checked in cloud
+before live operation. Fake-client tests cannot certify server ordering/atomicity.
 
 For recorded observations, JSONL rows contain `time`, `equity`, `account_ok`,
 `feed_ok`, `books` keyed by fixed instrument ID, optional `entry_prices` (verified

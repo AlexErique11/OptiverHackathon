@@ -71,6 +71,8 @@ def main():
     with Path(a.input).open(encoding='utf-8') as source, output.open('x', encoding='utf-8') as target:
         for line in source:
             row = json.loads(line)
+            if row.get('kind') == 'settings':
+                continue
             books = {i: DepthSnapshot(instrument_id=i, **b) for i, b in row['books'].items()}
             if engine is None:
                 engine = Controller(tuple(books), cfg, a.deadline)
