@@ -4,7 +4,7 @@ Shared Python workspace for a four-person Optibook team. Strategies propose orde
 
 ## Start in Optiver cloud (Linux)
 
-Our clone is `/home/workspace/your_optiver_workspace/OptiverHackathon`. Open `OptiverHackathon.cloud.code-workspace` to use the supplied `/opt/venv/bin/python` interpreter (observed Python 3.13.16). The `optibook` client is preinstalled and `Exchange()` reads its injected configuration automatically.
+Our clone is `/home/workspace/your_optiver_workspace/OptiverHackathon`. Keep Optiver's original `/home/workspace` editor workspace open to retain its preconfigured AI provider settings. Use the supplied `/opt/venv/bin/python` interpreter (observed Python 3.13.16). The `optibook` client is preinstalled and `Exchange()` reads its injected configuration automatically.
 
 ```bash
 cd /home/workspace/your_optiver_workspace/OptiverHackathon
@@ -14,6 +14,8 @@ cd /home/workspace/your_optiver_workspace/OptiverHackathon
 ```
 
 These commands do not connect or trade. Keep the supplied workspace files outside this repository. See [cloud setup and Git workflow](docs/CLOUD_ENVIRONMENT.md).
+
+`OptiverHackathon.cloud.code-workspace` is an optional standalone project workspace with the Python path configured; Optiver's AI provider settings are not copied into it.
 
 ## Hard position limit: 100 long or short per instrument
 

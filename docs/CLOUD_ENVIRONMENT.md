@@ -19,7 +19,9 @@ The team-specific URL and injected secrets are intentionally not stored in this 
 
 Keep the supplied workspace files intact. Our repository is a separate subfolder; do not initialize or publish the whole `/home/workspace` directory.
 
-Open `OptiverHackathon.cloud.code-workspace` inside the project to use the provided Python interpreter. VS Code tasks use `/opt/venv/bin/python` on Linux and the local `.venv` interpreter on Windows. If the editor has remembered a previous interpreter, run **Python: Select Interpreter** and choose `/opt/venv/bin/python` explicitly.
+Keep the original `/home/workspace` editor workspace open: Optiver's preconfigured AI provider settings are scoped there. Expand `your_optiver_workspace/OptiverHackathon` and use the terminal commands below. The cloud interpreter is `/opt/venv/bin/python`.
+
+The optional `OptiverHackathon.cloud.code-workspace` opens only our project and configures the Python interpreter. It does not inherit/copy Optiver's AI provider configuration. VS Code tasks are available when our project is opened as a folder/workspace; they use `/opt/venv/bin/python` on Linux and the local `.venv` interpreter on Windows. If the editor has remembered a previous interpreter, run **Python: Select Interpreter** and choose `/opt/venv/bin/python` explicitly. The explicit terminal commands below work from the original workspace too.
 
 From a cloud terminal:
 
