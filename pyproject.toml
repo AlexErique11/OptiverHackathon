@@ -1,0 +1,6 @@
+[project]
+name = "optiver-hackathon"
+version = "0.1.0"
+description = "Shared strategy and risk scaffolding for an Optibook team"
+requires-python = ">=3.10"
+dependencies = []

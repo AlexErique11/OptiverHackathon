@@ -1,0 +1,13 @@
+{
+  "note": "Reference checklist only; no live runner reads this file. Fill from the actual challenge. Save personal settings as challenge.local.json (ignored).",
+  "strategy": "inventory_maker",
+  "instruments": [],
+  "position_limit_per_instrument": null,
+  "max_order_size": null,
+  "max_requests_per_second": null,
+  "fees": null,
+  "portfolio_exposure_limit": null,
+  "competition_end": null,
+  "end_inventory_rule": null,
+  "scoring": null
+}
