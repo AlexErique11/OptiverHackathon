@@ -4,7 +4,9 @@
     {
       "label": "Offline strategy demo",
       "type": "process",
-      "command": "${workspaceFolder}/.venv/Scripts/python.exe",
+      "command": "python",
+      "windows": {"command": "${workspaceFolder}/.venv/Scripts/python.exe"},
+      "linux": {"command": "/opt/venv/bin/python"},
       "args": ["-m", "optiver_bot.demo"],
       "options": {"cwd": "${workspaceFolder}"},
       "problemMatcher": []
@@ -12,10 +14,22 @@
     {
       "label": "Run tests",
       "type": "process",
-      "command": "${workspaceFolder}/.venv/Scripts/python.exe",
+      "command": "python",
+      "windows": {"command": "${workspaceFolder}/.venv/Scripts/python.exe"},
+      "linux": {"command": "/opt/venv/bin/python"},
       "args": ["-m", "unittest", "discover", "-s", "tests", "-v"],
       "options": {"cwd": "${workspaceFolder}"},
       "group": {"kind": "test", "isDefault": true},
+      "problemMatcher": []
+    },
+    {
+      "label": "Check Optibook cloud environment (no connection)",
+      "type": "process",
+      "command": "python",
+      "windows": {"command": "${workspaceFolder}/.venv/Scripts/python.exe"},
+      "linux": {"command": "/opt/venv/bin/python"},
+      "args": ["scripts/check_cloud.py"],
+      "options": {"cwd": "${workspaceFolder}"},
       "problemMatcher": []
     }
   ]

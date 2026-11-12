@@ -2,6 +2,19 @@
 
 Shared Python workspace for a four-person Optibook team. Strategies propose orders; one shared runner owns risk checks and exchange access.
 
+## Start in Optiver cloud (Linux)
+
+Our clone is `/home/workspace/your_optiver_workspace/OptiverHackathon`. Open `OptiverHackathon.cloud.code-workspace` to use the supplied `/opt/venv/bin/python` interpreter (observed Python 3.13.16). The `optibook` client is preinstalled and `Exchange()` reads its injected configuration automatically.
+
+```bash
+cd /home/workspace/your_optiver_workspace/OptiverHackathon
+/opt/venv/bin/python scripts/check_cloud.py
+/opt/venv/bin/python -m unittest discover -s tests -v
+/opt/venv/bin/python -m optiver_bot.demo
+```
+
+These commands do not connect or trade. Keep the supplied workspace files outside this repository. See [cloud setup and Git workflow](docs/CLOUD_ENVIRONMENT.md).
+
 ## Hard position limit: 100 long or short per instrument
 
 Every instrument must stay within **-100 to +100 inclusive**. This is a confirmed event rule, not a tunable strategy parameter. Both the strategy configuration and capacity helper reject caps above 100; a lower internal cap is allowed.
