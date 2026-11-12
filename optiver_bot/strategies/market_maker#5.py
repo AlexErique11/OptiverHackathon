@@ -30,6 +30,11 @@ class Config:
     shock_ticks: float = 5.0
     cooldown: float = 5.0
 
+    @property
+    def news_pause_s(self):
+        """Compatibility with the renamed shared #4 runner's news guard."""
+        return self.cooldown
+
     def __post_init__(self):
         if type(self.cap) is not int or not 1 <= self.cap <= 100:
             raise ValueError('cap must be an integer between 1 and 100')
@@ -125,10 +130,16 @@ def load_runtime():
     name = '_optiver_strategy5_shared_runtime'
     if name not in sys.modules:
         path = Path(__file__).with_name('market_maker #1.py')
+        if not path.is_file():
+            path = Path(__file__).with_name('market_maker#4.py')
         spec = importlib.util.spec_from_file_location(name, path)
         module = importlib.util.module_from_spec(spec)
         sys.modules[name] = module
-        spec.loader.exec_module(module)
+        try:
+            spec.loader.exec_module(module)
+        except BaseException:
+            sys.modules.pop(name, None)
+            raise
     return sys.modules[name]
 
 
