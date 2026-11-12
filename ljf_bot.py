@@ -84,6 +84,9 @@ class Bot:
                 if n not in self.names or abs(int(q)) > HARD_LIMIT:
                     raise SystemExit(f"bad --bet entry {item!r}: unknown stock or |target| > 100")
                 self.targets[n] = int(q)
+        clash = [n for n in self.targets if n in self.mm]
+        if clash:
+            raise SystemExit(f"--bet and --mm cannot both include {clash}: quoting would keep closing the bet")
         self.feed_error_shown = False
         stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -210,7 +213,7 @@ class Bot:
             if mv is None or abs(mv) < a.jump_ticks or now - self.last_trigger.get(n, -1e9) < a.cooldown:
                 continue
             b, k = self.book[n]
-            if (k[0][0] - b[0][0]) / self.tick[n] > 4.5:      # one-sided glitch, not a jump
+            if not b or not k or (k[0][0] - b[0][0]) / self.tick[n] > 4.5:   # one-sided / glitch, not a jump
                 continue
             self.last_trigger[n] = now
             self.sample_dirty = True
@@ -258,7 +261,8 @@ class Bot:
         d = 1 if expected > 0 else -1
         pos = self.position(follower)                         # fresh; no resting orders by design
         cap = min(a.cap, HARD_LIMIT)
-        vol = max(0, min(a.size, (cap - pos) if d > 0 else (cap + pos), HARD_LIMIT))
+        reserve = a.mm_size if follower in self.mm else 0     # a quote whose cancel has not landed yet
+        vol = max(0, min(a.size, ((cap - pos) if d > 0 else (cap + pos)) - reserve, HARD_LIMIT))
         if vol <= 0:
             return self.log("skip", note=f"no capacity pos={pos}", **base)
         touch = fa[0][0] if d > 0 else fb[0][0]
@@ -272,7 +276,7 @@ class Bot:
         if filled:
             pre_mid = self.hist[follower][0][1]
             self.trades[follower] = dict(dir=d, base_pos=pos, t=now, entry=touch, tries=0, qty=filled, sim_pos=pos2,
-                                         target=pre_mid + 0.85 * expected * self.tick[follower])
+                                         target=pre_mid + a.target_frac * expected * self.tick[follower])
 
     def maybe_exit(self, follower):
         a, now, tr = self.a, self.clock(), self.trades[follower]
@@ -329,6 +333,11 @@ class Bot:
         """Quote ONE stock per visit at the others' touch, small size. Follower trades always come first."""
         a = self.a
         if not self.mm or self.done:
+            return
+        if self.halted:                                       # follower stopped itself: stop quoting too
+            self.log("mm_off", note="bot halted: quotes cancelled, quoting stopped")
+            self.mm_cancel_all()
+            self.mm = []
             return
         self.mm_cycle += 1
         if self.mm_cycle % a.mm_every:
@@ -589,17 +598,26 @@ class Bot:
         self.halted = True
         self.mm_cancel_all()
         self.mm = []
-        for _ in range(8):
-            if not self.trades:
-                break
-            for fo in list(self.trades):
-                self.read_book(fo)
-                self.maybe_exit(fo)
-            time.sleep(0.25 if self.settle else 0)
+        try:
+            for _ in range(8):
+                if not self.trades:
+                    break
+                for fo in list(self.trades):
+                    self.read_book(fo)
+                    self.maybe_exit(fo)
+                time.sleep(0.25 if self.settle else 0)
+        except Exception as e:
+            print(f"shutdown could not finish closing trades: {type(e).__name__}: {e}")
         if self.trades:
             print(f"WARNING: could not close positions opened by this bot in {list(self.trades)}; flatten manually.")
         if self.targets:
             print(f"NOTE: --bet positions {self.targets} are STILL OPEN. Run `ljf_bot.py flatten` to close them.")
+        try:
+            left = {k: v for k, v in (self.ex.get_positions() or {}).items() if v}
+            print(f"positions at exit: {left if left else 'all flat'}"
+                  + ("  -> run `ljf_bot.py flatten` to close them" if left else ""))
+        except Exception:
+            pass
         try:                                                  # safety net: everything the client saw since connect
             hist = self.ex.get_social_media_feeds_history() or []
             for p in hist:
@@ -717,8 +735,10 @@ def build_parser():
         s.add_argument("--min-remaining", type=float, default=3.0)
         s.add_argument("--entry-frac", type=float, default=0.5)
         s.add_argument("--hold", type=float, default=10.0)
+        s.add_argument("--target-frac", type=float, default=1.0,
+                       help="exit once the follower has done this share of its expected move (99 = never, exit on time)")
         s.add_argument("--stop-ticks", type=float, default=8.0)
-        s.add_argument("--cooldown", type=float, default=15.0)
+        s.add_argument("--cooldown", type=float, default=5.0)
         s.add_argument("--learn-min", type=int, default=60, help="5 s samples before correlation links (60 = 5 min)")
         s.add_argument("--learn-corr", type=float, default=0.4)
         s.add_argument("--max-losses", type=int, default=3)
@@ -760,14 +780,27 @@ def main(argv=None):
     bot = Bot(ex, args, live=args.live, out_dir=Path(args.log_dir))
     print(("LIVE ORDERS" if args.live else "DRY RUN: NO ORDERS ARE SENT (add --live)") + f" size={args.size} sleep={args.sleep}")
     signal.signal(signal.SIGTERM, lambda *_: (_ for _ in ()).throw(KeyboardInterrupt()))
-    last_beat = time.monotonic()
+    last_beat, errors = time.monotonic(), 0
     try:
         while True:
             if not ex.is_connected():
                 print("DISCONNECTED: stopping (not reconnecting).")
                 break
             t = time.monotonic()
-            bot.step()
+            try:
+                bot.step()
+                errors = 0
+            except KeyboardInterrupt:
+                raise
+            except Exception as e:
+                errors += 1
+                print(f"[{utc()[11:19]}] STEP ERROR {errors}/5: {type(e).__name__}: {e}")
+                bot.log("error", quiet=True, note=f"{type(e).__name__}: {e}")
+                if errors >= 5:
+                    print("5 errors in a row: stopping.")
+                    break
+                time.sleep(0.2)
+                continue
             if bot.done:
                 print(bot.done)
                 bot.flatten_all()
