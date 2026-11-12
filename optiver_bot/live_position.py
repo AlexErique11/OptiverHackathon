@@ -71,6 +71,7 @@ class Controller:
         self.last = None
         self.initial_equity = None
         self.loss_halted = False
+        self.readiness = {}
 
     def update(self, now, books: dict[str, Snapshot], *, equity: float,
                account_ok: bool, news=(), feed_ok=False, entry_prices=None):
@@ -127,6 +128,27 @@ class Controller:
                 slow_return=log(h[-1][1]/slow) if slow else 0, sigma=pstdev(returns))
         ready = [f for f in features.values() if f.ready]
         covered = len(ready) >= ceil(len(self.ids) * self.cfg.coverage)
+        for i, f in features.items():
+            h, b = self.history[i], books.get(i)
+            span = h[-1][0]-h[0][0] if len(h) > 1 else 0.
+            recent = [p for t, p in h if t >= now-self.cfg.warmup-2.5]
+            changes = sum(a != b for a, b in zip(recent, recent[1:]))
+            blockers = []
+            if b is None:
+                blockers.append('missing_book')
+            elif not valid_book(b, self.cfg):
+                blockers.append('stale_book' if b.book_age_seconds > self.cfg.max_age else 'invalid_book')
+            if span < self.cfg.warmup:
+                blockers.append('history')
+            if changes < self.cfg.min_changes:
+                blockers.append('price_changes')
+            if not covered:
+                blockers.append('basket_coverage')
+            self.readiness[i] = dict(samples=len(h), history_seconds=round(span, 3),
+                price_changes=changes, required_changes=self.cfg.min_changes,
+                book_age_seconds=b.book_age_seconds if b else None,
+                local_ready=bool(f.ready), ready_stocks=len(ready),
+                required_stocks=ceil(len(self.ids)*self.cfg.coverage), blockers=blockers)
         basket = sum(f.slow_return for f in ready) / len(ready) if ready else 0
         up = sum(f.slow_return > 0 for f in ready) / len(ready) if ready else 0
         down = sum(f.slow_return < 0 for f in ready) / len(ready) if ready else 0
@@ -173,7 +195,9 @@ class Controller:
             life.previous_position = b.position
             d = direction(f, b, c) if feed_ok and now >= self.news_until[i] else 0
             life.streak = life.streak + d if d and life.streak*d >= 0 else d
-            reason, risk_exit = 'warmup' if not f.ready else 'no_signal', False
+            blockers = self.readiness[i]['blockers']
+            reason = 'warmup:'+blockers[0] if not f.ready and blockers else 'no_signal'
+            risk_exit = False
             target = life.target if b.position else 0
             if b.position:
                 sign = 1 if b.position > 0 else -1

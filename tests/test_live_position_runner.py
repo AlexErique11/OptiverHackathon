@@ -1,4 +1,5 @@
 import contextlib
+from dataclasses import asdict
 from decimal import Decimal
 from datetime import datetime, timezone
 import io
@@ -220,6 +221,19 @@ class AdapterTests(unittest.TestCase):
 
 
 class RunnerTests(unittest.TestCase):
+    def test_readiness_diagnostic_reads_older_logs_and_partial_trailing_line(self):
+        from scripts.diagnose_strategy6 import diagnose
+        with tempfile.TemporaryDirectory(dir='results/test-temp') as d:
+            path = Path(d)/'recording.jsonl'
+            header = dict(kind='settings', config=asdict(config()), instruments=['A'], duration=1200)
+            rows = [dict(kind='frame', time=t, equity=0, account_ok=True, feed_ok=True,
+                         books={'A': dict(bid=100, ask=100.1, tick_size=.1)}) for t in range(40)]
+            path.write_text('\n'.join(json.dumps(r) for r in [header]+rows)+'\n{"kind":')
+            report = diagnose(path)
+        self.assertEqual(report['seconds'], 39)
+        self.assertEqual(report['stocks']['A']['price_changes'], 0)
+        self.assertIn('price_changes', report['stocks']['A']['blockers'])
+
     def test_flatten_large_clips_never_reverse_and_cap_at_depth(self):
         for start, expected_side in ((43, 'ask'), (-43, 'bid')):
             f = Fake()
