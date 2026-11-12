@@ -220,6 +220,38 @@ class AdapterTests(unittest.TestCase):
 
 
 class RunnerTests(unittest.TestCase):
+    def test_flatten_large_clips_never_reverse_and_cap_at_depth(self):
+        for start, expected_side in ((43, 'ask'), (-43, 'bid')):
+            f = Fake()
+            f.pos['A'] = start
+            with tempfile.TemporaryDirectory(dir='results/test-temp') as d, contextlib.redirect_stdout(io.StringIO()):
+                code = main(['flatten', '--live', '--instruments', 'A', '--max-requests', '1000',
+                             '--clip', '20', '--log-dir', d], exchange_factory=lambda: f,
+                            clock=f.clock, sleep=f.sleep, wall=lambda: 1000000+f.now,
+                            preflight=lambda: {}, max_frames=20)
+            self.assertEqual(code, 0)
+            self.assertEqual(f.pos['A'], 0)
+            orders = [c for c in f.calls if c[0] == 'insert']
+            self.assertEqual([c[3] for c in orders], [20, 20, 3])
+            self.assertTrue(all(c[1] == expected_side for c in orders))
+
+    def test_partial_ioc_does_not_trigger_blind_large_retry(self):
+        f = Fake()
+        f.pos['A'] = -43
+        original = f.insert_order
+        def partial(i, **kw):
+            kw['volume'] = min(5, kw['volume'])
+            return original(i, **kw)
+        f.insert_order = partial
+        with tempfile.TemporaryDirectory(dir='results/test-temp') as d, contextlib.redirect_stdout(io.StringIO()):
+            code = main(['flatten', '--live', '--instruments', 'A', '--max-requests', '1000',
+                         '--clip', '20', '--log-dir', d], exchange_factory=lambda: f,
+                        clock=f.clock, sleep=f.sleep, wall=lambda: 1000000+f.now,
+                        preflight=lambda: {}, max_frames=20)
+        self.assertEqual(code, 1)
+        self.assertEqual(f.pos['A'], -38)
+        self.assertEqual(len([c for c in f.calls if c[0] == 'insert']), 1)
+
     def test_flatten_live_confirms_each_lot_and_ends_flat(self):
         f = Fake()
         f.pos['A'] = -3

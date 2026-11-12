@@ -401,7 +401,7 @@ def cloud_preflight(root=Path('/home/workspace')):
 
 
 def flatten_loop(adapter, cfg, live, deadline, clock, sleep, path, max_frames=None):
-    """One-lot IOC reductions. Never repeat until that exact lot is confirmed.
+    """Depth-capped IOC reductions. Never repeat until exact quantity is confirmed.
 
     A no-fill or unknown outcome ends on timeout/failure, not a blind retry that
     could overshoot flat after delayed client updates. Exit 0 means verified flat.
@@ -424,8 +424,8 @@ def flatten_loop(adapter, cfg, live, deadline, clock, sleep, path, max_frames=No
                 if not a.certain:
                     continue
                 if i in waiting:
-                    side, count = waiting[i]
-                    if adapter.filled[i][side] < count+1:
+                    side, count, quantity = waiting[i]
+                    if adapter.filled[i][side] < count+quantity:
                         outcomes[i] = 'waiting_for_exact_fill_confirmation'
                         continue
                     del waiting[i]
@@ -434,14 +434,17 @@ def flatten_loop(adapter, cfg, live, deadline, clock, sleep, path, max_frames=No
                 if q and strategy.valid_book(a.book, cfg):
                     side = 'ask' if q > 0 else 'bid'
                     price = a.book.bid if q > 0 else a.book.ask
-                    desired = (DesiredOrder(i, side, price, 1, 'ioc'),)
+                    depth = a.book.bid_volume if q > 0 else a.book.ask_volume
+                    quantity = min(abs(q), cfg.clip, depth)
+                    if quantity:
+                        desired = (DesiredOrder(i, side, price, quantity, 'ioc'),)
                 if live:
                     side_index = 1 if q > 0 else 0
                     before = adapter.filled[i][side_index]
                     result = gate.reconcile(i, desired, 0, clock())
                     outcomes[i] = result
                     if result == 'insert_requested':
-                        waiting[i] = (side_index, before)
+                        waiting[i] = (side_index, before, desired[0].volume)
                     if result in ('insert_unknown', 'cancel_unknown', 'unsafe'):
                         print('Flatten stopped on uncertain outcome; inspect remaining positions. No blind retry.')
                         return 1
@@ -483,7 +486,7 @@ def parser():
     r.add_argument('--clip', type=int, default=1)
     r.add_argument('--max-age', type=float, default=1.)
     r.add_argument('--log-dir', default='logs/strategy6')
-    f = sub.add_parser('flatten', help='close selected positions one confirmed lot at a time')
+    f = sub.add_parser('flatten', help='close selected positions with confirmed depth-capped clips')
     f.add_argument('--live', action='store_true', help='execute reductions; otherwise preview only')
     f.add_argument('--instruments', required=True)
     f.add_argument('--max-requests', type=int, required=True)
@@ -491,6 +494,7 @@ def parser():
     f.add_argument('--max-order-size', type=int, default=100000)
     f.add_argument('--duration-seconds', type=float, default=300)
     f.add_argument('--max-age', type=float, default=1.)
+    f.add_argument('--clip', type=int, default=1, help='maximum lots per reduction, 1-100')
     f.add_argument('--log-dir', default='logs/strategy6')
     # Reduction-only placeholders cannot enable entry: flatten_loop never requests
     # a nonzero target and adapter.entry_enabled remains false.
@@ -514,7 +518,7 @@ def main(argv=None, *, exchange_factory=None, clock=time.monotonic,
             sys.argv = old
         return 0
     try:
-        cfg = strategy.Config(cap=args.cap, target=args.target, clip=args.clip,
+        cfg = strategy.Config(cap=args.cap, target=args.clip if args.command == 'flatten' else args.target, clip=args.clip,
                               round_trip_cost_ticks=args.cost_ticks, gross_limit=args.gross_limit,
                               position_cash_risk=args.cash_risk, loss_limit=args.loss_limit, max_age=args.max_age)
         ids = tuple(x.strip() for x in args.instruments.split(',') if x.strip())

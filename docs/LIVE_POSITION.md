@@ -31,6 +31,11 @@ a possibly stale position. Only `FLAT CONFIRMED:` indicates successful completio
 Closing may incur spreads/slippage and realize losses; account PnL does NOT reset.
 Then use `run --live` WITHOUT `--manage-existing`; the new run's baseline is its
 starting PnL and the live guard requires all selected positions to be zero.
+For faster reductions add `--clip 20`. Quantity is capped by remaining inventory,
+visible opposite best-level depth and the configured maximum order size. Full
+confirmation is required before the next clip; a partially filled IOC may stop
+on timeout rather than silently retry its uncertain remainder. Larger clips may
+incur more slippage. The default remains one lot.
 
 Read `/home/workspace/AGENTS.md`, `/home/workspace/api_reference.md` and the unlocked
 challenge rules first. Confirm method/response fields against the supplied client.
