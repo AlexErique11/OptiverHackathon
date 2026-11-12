@@ -10,7 +10,10 @@ from math import isfinite
 from typing import Protocol
 
 from optiver_bot.models import DesiredOrder, Snapshot
-from optiver_bot.strategies.live_position import Config, valid_book
+from importlib import import_module
+
+_strategy = import_module('optiver_bot.strategies.market_maker#6')
+Config, valid_book = _strategy.Config, _strategy.valid_book
 
 
 @dataclass(frozen=True)

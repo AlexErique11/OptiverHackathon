@@ -1,4 +1,4 @@
-"""Pure position-target strategy. Inputs are supplied by the one execution owner."""
+"""Strategy #6: pure position-target rules supplied by the one execution owner."""
 from dataclasses import dataclass
 from math import isfinite, sqrt
 

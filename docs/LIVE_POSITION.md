@@ -1,4 +1,8 @@
-**Live position candidate**
+**Strategy #6: live position candidate**
+
+Canonical strategy file: `optiver_bot/strategies/market_maker#6.py`. Controller,
+execution and replay entry points keep their existing names. Numbered strategy
+modules are loaded with importlib because '#' cannot appear in an import statement.
 
 Implementation branch: `codex/live-position-strategy`. Existing strategies are
 unchanged. No exchange connection is opened by any new module, including imports,
@@ -45,7 +49,7 @@ TEMP/TMP set to a directory under ignored results/. In cloud use /opt/venv/bin/p
 
 Public integration interfaces:
 
-- `strategies.live_position.Config`, `DepthSnapshot`, `Features`, `PositionSnapshot`
+- Strategy #6's `Config`, `DepthSnapshot`, `Features`, `PositionSnapshot`
   and `decide(snapshot, config)` implement pure rules and target orders.
 - `live_position.Controller.update(time, books, equity=..., account_ok=...,
   news=..., feed_ok=...)` maintains bounded market/lifecycle state. Feed one

@@ -2,7 +2,10 @@ import unittest
 from dataclasses import replace
 
 from optiver_bot.models import Snapshot, DesiredOrder
-from optiver_bot.strategies.live_position import Config, PositionSnapshot, decide
+from importlib import import_module
+
+_strategy = import_module('optiver_bot.strategies.market_maker#6')
+Config, PositionSnapshot, decide = _strategy.Config, _strategy.PositionSnapshot, _strategy.decide
 from optiver_bot.live_position import Controller, News
 from optiver_bot.live_position_execution import Account, Resting, Budget, Executor
 from optiver_bot.live_position_replay import Markouts, local_output

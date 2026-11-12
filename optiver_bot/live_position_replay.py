@@ -11,7 +11,10 @@ from dataclasses import asdict
 from pathlib import Path
 
 from optiver_bot.live_position import Controller, News
-from optiver_bot.strategies.live_position import Config, DepthSnapshot
+from importlib import import_module
+
+_strategy = import_module('optiver_bot.strategies.market_maker#6')
+Config, DepthSnapshot = _strategy.Config, _strategy.DepthSnapshot
 
 
 class Markouts:

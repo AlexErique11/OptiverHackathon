@@ -14,9 +14,12 @@ from math import ceil, log, sqrt
 from statistics import pstdev
 
 from optiver_bot.models import Snapshot
-from optiver_bot.strategies.live_position import (
-    Config, Features, PositionSnapshot, decide, direction, valid_book,
-)
+from importlib import import_module
+
+# Numbered filenames contain '#', so load the canonical module by name.
+_strategy = import_module('optiver_bot.strategies.market_maker#6')
+Config, Features, PositionSnapshot = _strategy.Config, _strategy.Features, _strategy.PositionSnapshot
+decide, direction, valid_book = _strategy.decide, _strategy.direction, _strategy.valid_book
 
 
 @dataclass(frozen=True)
