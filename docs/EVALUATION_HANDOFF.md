@@ -1,0 +1,13 @@
+# Integration handoff: independent evaluation and risk
+
+Owner action: review the shared risk implementation and execution reconciliation in the canonical integration checkout. Evaluation owns its offline tools and separate tests; it has not modified shared risk code or operated a live bot.
+
+The supplied original `project_setup` permits configuration/capacity limits above 100 and does not reject observed positions outside +/-100. Do not integrate that version unchanged. The supplied `position_limit_update` validates these cases; the positive evaluation reference uses its exact models/risk files. The original is retained only as an audit negative control. Detailed audit output is in ignored `results/evaluation/original-risk-audit.json`; the positive result is in `risk-audit.json`.
+
+The shared capacity helper is not a complete execution risk gate. It returns zero new capacity on an exhausted side but does not cancel existing unsafe orders. The execution owner must reserve pending inserts and **full remaining** cancel-pending quantities, process partial fills using current position and remainder, and reconcile fresh position/order state after acknowledgments before allowing replacement. A cancel request is not a release of risk capacity. Opposite orders and other instruments never offset per-instrument worst-case fills. Both -100 and +100 are valid; selling from flat is valid.
+
+Run `python -m evaluation.audit --strategy-root <canonical-checkout> --output results/evaluation/integration-risk.json`. An all-green offline audit verifies only the listed contracts and simulated event orderings; it cannot certify live adapter behavior, atomicity, reconnect state or rate enforcement. Repeat integration-specific adapter tests before using the one existing execution connection. Do not create another connection for evaluation.
+
+Use `evaluation/README.md` for the comparison protocol and reproduction commands. Add actual candidate modules and confirmed event costs to an ignored local suite, supply chronological recorded input, and retain a new untouched future holdout. Results must include assumptions and profit attribution; the replay's independent preflight gate must not mask unsafe raw strategy proposals.
+
+Coordination status: no integration-owner chat was identified in the local context. An attempted message to another active chat was rejected by automatic approval review because destination ownership/authorization was unestablished. No message was delivered. This handoff is ready for the user to route or explicitly authorize sending to the identified integration owner.

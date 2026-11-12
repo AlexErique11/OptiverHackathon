@@ -1,0 +1,70 @@
+{
+  "hash_convention": "SHA-256 after CRLF-to-LF normalization",
+  "files": [
+    {
+      "frozen_path": "evaluation/reference/optiver_bot/__init__.py",
+      "source_path": "project_setup/optiver_bot/__init__.py",
+      "sha256_lf": "11f25e6e45ee8111298b8ff71a4be75250e0d2f89f87eee15658a269dab1131d"
+    },
+    {
+      "frozen_path": "evaluation/reference/optiver_bot/demo.py",
+      "source_path": "position_limit_update/optiver_bot/demo.py",
+      "sha256_lf": "d0cdf6c1f7fb182b38a771d25bb13e61f744eabfe33382a9b6a62c79a7d96936"
+    },
+    {
+      "frozen_path": "evaluation/reference/optiver_bot/models.py",
+      "source_path": "position_limit_update/optiver_bot/models.py",
+      "sha256_lf": "b513dc933fde041e49a2e765fc1419a1fa53491ee177e7810353ddf2a0d1ccdf"
+    },
+    {
+      "frozen_path": "evaluation/reference/optiver_bot/risk.py",
+      "source_path": "position_limit_update/optiver_bot/risk.py",
+      "sha256_lf": "da77e84fdd6baea30cbdbfb0c0d0c3afec13ee0a00174647ab7064f4666f6c4b"
+    },
+    {
+      "frozen_path": "evaluation/reference/optiver_bot/strategies/__init__.py",
+      "source_path": "project_setup/optiver_bot/strategies/__init__.py",
+      "sha256_lf": "163892dbc92b472b90d4b8ded4b81283050531c62bc7c69c1a080471da885640"
+    },
+    {
+      "frozen_path": "evaluation/reference/optiver_bot/strategies/inventory_maker.py",
+      "source_path": "project_setup/optiver_bot/strategies/inventory_maker.py",
+      "sha256_lf": "221c0e0c6e78d2ef577208e374bdb2a17a164d70dc043083ba4a2f0821629cb0"
+    },
+    {
+      "frozen_path": "evaluation/reference/optiver_bot/strategies/template.py",
+      "source_path": "project_setup/optiver_bot/strategies/template.py",
+      "sha256_lf": "32e9d8b2764abe365520d5731b1fb285f66ca52b1a656a71a0d28c684726fe01"
+    },
+    {
+      "frozen_path": "evaluation/reference_original/optiver_bot/__init__.py",
+      "source_path": "project_setup/optiver_bot/__init__.py",
+      "sha256_lf": "11f25e6e45ee8111298b8ff71a4be75250e0d2f89f87eee15658a269dab1131d"
+    },
+    {
+      "frozen_path": "evaluation/reference_original/optiver_bot/models.py",
+      "source_path": "project_setup/optiver_bot/models.py",
+      "sha256_lf": "eb1581a4391c70210d1ce9464be4febe87c498eb6cf1ce433cd0e7a9b090079c"
+    },
+    {
+      "frozen_path": "evaluation/reference_original/optiver_bot/risk.py",
+      "source_path": "project_setup/optiver_bot/risk.py",
+      "sha256_lf": "21bc9aa8d56a25f52fcf96d46e068bf65d12f963d98773e6f2802803c821ffe1"
+    },
+    {
+      "frozen_path": "evaluation/reference_original/optiver_bot/strategies/__init__.py",
+      "source_path": "project_setup/optiver_bot/strategies/__init__.py",
+      "sha256_lf": "163892dbc92b472b90d4b8ded4b81283050531c62bc7c69c1a080471da885640"
+    },
+    {
+      "frozen_path": "evaluation/reference_original/optiver_bot/strategies/inventory_maker.py",
+      "source_path": "project_setup/optiver_bot/strategies/inventory_maker.py",
+      "sha256_lf": "221c0e0c6e78d2ef577208e374bdb2a17a164d70dc043083ba4a2f0821629cb0"
+    },
+    {
+      "frozen_path": "evaluation/reference_original/optiver_bot/strategies/template.py",
+      "source_path": "project_setup/optiver_bot/strategies/template.py",
+      "sha256_lf": "32e9d8b2764abe365520d5731b1fb285f66ca52b1a656a71a0d28c684726fe01"
+    }
+  ]
+}
