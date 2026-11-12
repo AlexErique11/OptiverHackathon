@@ -2,13 +2,18 @@
 from decimal import Decimal, ROUND_CEILING, ROUND_FLOOR
 from math import isfinite
 
+from optiver_bot.models import MAX_POSITION_PER_INSTRUMENT
 
-def capacity(position: int, limit: int, buys: int = 0, sells: int = 0) -> tuple[int, int]:
+
+def capacity(position: int, limit: int = MAX_POSITION_PER_INSTRUMENT,
+             buys: int = 0, sells: int = 0) -> tuple[int, int]:
     values = (position, limit, buys, sells)
     if any(type(value) is not int for value in values):
         raise ValueError("Positions and volumes must be integers")
-    if limit <= 0 or buys < 0 or sells < 0:
+    if not 0 < limit <= MAX_POSITION_PER_INSTRUMENT or buys < 0 or sells < 0:
         raise ValueError("Invalid limit or outstanding volume")
+    if abs(position) > MAX_POSITION_PER_INSTRUMENT:
+        raise ValueError("Observed position is outside the hard per-instrument +/-100 limit")
     # Each side can fill alone. Never net possible buys against possible sells.
     return max(0, limit - position - buys), max(0, limit + position - sells)
 

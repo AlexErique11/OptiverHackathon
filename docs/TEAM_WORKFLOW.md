@@ -2,6 +2,8 @@
 
 Suggested roles: two strategy developers, one execution/risk owner and one evaluation/integration owner. Everyone shares the same input/output contract.
 
+Hard rule for every team member and strategy: each instrument's net position must remain between -100 and +100 inclusive. Count all possible outstanding fills independently on each side; opposing orders or other instruments cannot offset this check. Lower internal caps are allowed; caps above 100 are rejected.
+
 1. Pull the latest integration branch before editing.
 2. Create a personal branch such as `strategy/alex-inventory`.
 3. Copy `optiver_bot/strategies/template.py` to a unique filename. Implement `decide(snapshot, config)` with no exchange access.

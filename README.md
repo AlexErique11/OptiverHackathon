@@ -2,6 +2,17 @@
 
 Shared Python workspace for a four-person Optibook team. Strategies propose orders; one shared runner owns risk checks and exchange access.
 
+## Hard position limit: 100 long or short per instrument
+
+Every instrument must stay within **-100 to +100 inclusive**. This is a confirmed event rule, not a tunable strategy parameter. Both the strategy configuration and capacity helper reject caps above 100; a lower internal cap is allowed.
+
+Before adding orders, reserve all possible outstanding fills independently:
+
+- `buy_capacity = max(0, cap - current_position - outstanding_buy_volume)`
+- `sell_capacity = max(0, cap + current_position - outstanding_sell_volume)`
+
+Include proposed volume in the corresponding capacity check. Opposite orders and positions in other instruments do not offset risk. At +100, stop new buys; at -100, stop new sells. The eventual runner must also cancel unsafe existing orders, handle cancellation/fill races and recheck fresh state before submission.
+
 ## Start locally (Windows)
 
 A virtual environment has been created in `.venv` on this computer. No third-party dependencies are needed for the starter code.
@@ -40,7 +51,7 @@ Every strategy exposes `decide(snapshot, config) -> list[DesiredOrder]`. Strateg
 
 Start in the provided cloud environment with `your_optiver_workspace/optibook_guides/code_snippets.ipynb`. The documented API package is `optibook.synchronous_client`; use the supplied notebook for configuration. Do not install an unrelated similarly named package from PyPI.
 
-There is no live-order runner in this starter. The demo uses artificial prices and limits. Fill in the actual challenge rules before writing the exchange adapter; only one process should own the trading username. The documented API allows one connection per trading username.
+There is no live-order runner in this starter. The demo uses artificial prices and the confirmed +/-100 position cap. Fill in the remaining challenge rules before writing the exchange adapter; only one process should own the trading username. The documented API allows one connection per trading username.
 
 - [Setup](https://2026-bona-fide.optibook.net/setup-instructions)
 - [Client methods](https://2026-bona-fide.optibook.net/docs/synchronous_client)

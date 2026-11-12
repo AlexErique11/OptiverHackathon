@@ -4,6 +4,7 @@
 - Implement strategies through `decide(snapshot, config) -> list[DesiredOrder]`.
 - Keep strategy functions deterministic and independent of exchange connections and credentials.
 - One execution process owns all orders. Do not introduce a second connector in a strategy.
+- HARD POSITION LIMIT: every instrument must stay between -100 (short) and +100 (long), inclusive. Count current position plus all possible outstanding and proposed fills on each side independently. Never offset buy orders against sell orders or positions across instruments. Use a lower internal cap if desired; never configure a cap above 100. Cancel risk-increasing orders before replacing them and confirm fresh positions/order state before sending more.
 - Confirm instrument relationships, limits, costs and request budgets from the challenge. Do not treat example numbers as event rules.
 - Check current positions plus all possible outstanding fills. Do not assume opposite orders offset or that a cancellation succeeded.
 - Do not publish credentials, participant information, provided challenge materials or data. Keep output in ignored directories.

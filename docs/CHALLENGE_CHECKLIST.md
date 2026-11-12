@@ -1,9 +1,10 @@
 # Fill from the unlocked challenge brief
 
+- CONFIRMED: hard net position per instrument is -100 to +100 inclusive. Reserve outstanding buy and sell quantities independently, plus proposed orders; no cross-instrument offsets. Smaller internal caps are permitted.
 - Objective and ranking/scoring formula:
 - Available instruments and tick sizes:
 - Explicit payoff relationships, fair-value inputs, signals/news:
-- Position limits, portfolio/notional/delta limits:
+- Additional portfolio/notional/delta limits (per-instrument hard cap is already 100):
 - Maximum order size, resting orders and request rate:
 - Fees/rebates:
 - Practice versus competition environment:
