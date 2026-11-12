@@ -8,7 +8,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 m = runpy.run_path(str(Path(__file__).resolve().parents[1]
-                       / 'optiver_bot/strategies/market_maker#6.py'))
+                       / 'optiver_bot/strategies/market_maker#8.py'))
 Config, Snapshot, Point = (m[k] for k in ('Config', 'Snapshot', 'Point'))
 decide, classify = m['decide'], m['classify']
 flat = m['flat']

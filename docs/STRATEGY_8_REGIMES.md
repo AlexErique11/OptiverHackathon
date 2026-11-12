@@ -1,8 +1,13 @@
-# Strategy #6: inventory-light regime market maker
+# Strategy #8: inventory-light regime market maker
 
-Module: optiver_bot/strategies/market_maker#6.py. Dependencies: #5's risk/pacing
+Module: optiver_bot/strategies/market_maker#8.py. Dependencies: #5's risk/pacing
 wrapper and #1's runner, in the same folder. Strategies #1-#5 are unchanged.
 No args or demo is offline. run creates ONE connection; orders default dry-run.
+
+Numbering: the pulled main branch independently added the live-position strategy
+as #6 and its #7 entry point. Those files are preserved unchanged. This separate
+regime maker was renamed from its development number #6 to #8 to resolve the
+add/add filename conflict. Its tests and diagnostic command were renamed too.
 
 ## Frozen rule-of-thumb defaults
 
@@ -55,7 +60,7 @@ All quotes/exits are PASSIVE LIMITS. Exit thresholds trigger requests, not a
 guaranteed fill, maximum loss or deadline to flat. If no takers arrive, positions
 can remain open. Ctrl+C cancels resting orders through #1 cleanup; it does not
 liquidate inventory. Stop the runner before invoking #1's separate flatten tool.
-Do not run #6 in parallel with #1/#5 or any other bot under the same username.
+Do not run #8 in parallel with #1/#5 or any other bot under the same username.
 
 #5 counts all raw API calls after connection against the operator's supplied
 budget, including reads. No event request/order limits or costs are invented.
@@ -67,26 +72,26 @@ Actual API fields and event limits must still be checked against the cloud brief
 ## Commands (repository root in the provided cloud)
 
 ```bash
-/opt/venv/bin/python 'optiver_bot/strategies/market_maker#6.py' demo
+/opt/venv/bin/python 'optiver_bot/strategies/market_maker#8.py' demo
 ```
 
 Market-data dry-run below still uses the team's sole connection. Replace COST,
 REQUESTS and MAX_ORDER with verified values before running:
 
 ```bash
-/opt/venv/bin/python 'optiver_bot/strategies/market_maker#6.py' run \
+/opt/venv/bin/python 'optiver_bot/strategies/market_maker#8.py' run \
   --instruments AMD,AVGO,CRWV,MU,NBIS,NVDA,SNDK,VRT --cap 10 --size 2 \
   --cost-ticks COST --max-requests REQUESTS --max-order-size MAX_ORDER
 ```
 
 Only the team operator adds --live. No live execution was performed during this
 implementation. Config validation occurs before the one connection-factory call.
-Regime/position observation logs go to logs/regime6_*.jsonl; #1 quote/state CSVs
-go to logs/run6_*.csv. These are observations, not a complete actual-fill ledger.
+Regime/position observation logs go to logs/regime8_*.jsonl; #1 quote/state CSVs
+go to logs/run8_*.csv. These are observations, not a complete actual-fill ledger.
 
 ## Validation and diagnostic replay
 
-57 repository tests pass, including 18 new #6 tests for range/up/down modes,
+81 merged repository tests pass, including 18 new #8 tests for range/up/down modes,
 confirmation, warm-up, gaps, invalid data, independent bounds, stops/timeouts,
 latched exits, partial-fill lifecycle, shock reset, cancellation/fill races,
 non-reversing exits and one-factory dry-run defaults. Offline demos also pass.
@@ -101,13 +106,13 @@ the later segment is a signal diagnostic, not validated out-of-sample profit.
 To reproduce on the original CSV without a connection:
 
 ```bash
-python -m scripts.diagnose_regime6 --csv data/run_20261112T174306Z.csv
+python -m scripts.diagnose_regime8 --csv data/run_20261112T174306Z.csv
 python -m unittest discover -s tests -v
 python -m optiver_bot.demo
 ```
 
-Data and outputs remain under ignored data/, logs/ and results/. Compare #1/#5/#6
+Data and outputs remain under ignored data/, logs/ and results/. Compare #1/#5/#8
 on the same true chronological market/trade data with measured fees, latency,
 queue/fill assumptions, drawdown, actual fills, rejects and request counts.
-The recorded other bot's PnL must not be attributed to #6. Profitability remains
+The recorded other bot's PnL must not be attributed to #8. Profitability remains
 unproven and the observed short sample is insufficient for robust optimization.

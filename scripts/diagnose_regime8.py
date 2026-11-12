@@ -1,6 +1,6 @@
 """Causal quote/regime diagnostic. NO counterfactual fills or profit estimates.
 
-python -m scripts.diagnose_regime6 --csv data/recording.csv
+python -m scripts.diagnose_regime8 --csv data/recording.csv
 Requires the previously recorded clean bid/ask CSV; never connects to Optibook.
 Tick=0.1 and zero costs are explicit diagnostic assumptions, not event rules.
 Positions are kept flat to examine signals alone, not simulated executions.
@@ -30,7 +30,7 @@ def main():
         rows=json.loads(Path(args.json).read_text())
     rows.sort(key=lambda r:r[0])
     root=Path(__file__).resolve().parents[1]
-    module=runpy.run_path(str(root/'optiver_bot/strategies/market_maker#6.py'))
+    module=runpy.run_path(str(root/'optiver_bot/strategies/market_maker#8.py'))
     config=module['Config'](cost_ticks=0)
     adapter=SimpleNamespace(own={},received={})
     reducing=SimpleNamespace(reduce_only={})
