@@ -616,6 +616,7 @@ def main(argv=None, *, exchange_factory=None, clock=time.monotonic,
                     books={i: {k: v for k, v in asdict(b).items() if k != 'instrument_id'} for i, b in books.items()},
                     entry_prices=frame_entry_prices, news=[{**asdict(n), 'received_at': n.received_at-start} for n in news],
                     fills=pending_fills, decisions=[asdict(d) for d in decisions], outcomes=outcomes,
+                    readiness=engine.readiness,
                     envelopes={i: adapter.envelope(i) for i in ids},
                     markouts=adapter.markouts.observe(now, {i: (b.bid+b.ask)/2 for i, b in books.items()
                         if strategy.valid_book(b, cfg)}))

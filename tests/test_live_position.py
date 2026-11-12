@@ -31,6 +31,19 @@ def warm(cfg=None, negative=False):
 
 
 class SignalTests(unittest.TestCase):
+    def test_quiet_market_reports_changes_not_an_endless_unnamed_warmup(self):
+        e = Controller(('A',), config(), 1200)
+        for t in range(40):
+            d = e.update(t, {'A': book()}, equity=0, account_ok=True, feed_ok=True)[0]
+        self.assertEqual(d.reason, 'warmup:price_changes')
+        self.assertEqual(e.readiness['A']['price_changes'], 0)
+        self.assertEqual(e.readiness['A']['required_changes'], 10)
+
+    def test_stale_book_has_explicit_blocker(self):
+        e = Controller(('A',), config(), 1200)
+        d = e.update(0, {'A': book(book_age_seconds=5)}, equity=0, account_ok=True)[0]
+        self.assertEqual(d.reason, 'warmup:stale_book')
+
     def test_normal_network_jitter_does_not_crash_analysis(self):
         e = Controller(('A',), config(), 1200)
         for n in range(40):

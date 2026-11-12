@@ -109,6 +109,21 @@ normal exit attempt to cancel orders and disconnect. Cancelling/disconnecting do
 NOT guarantee liquidation; wind-down works reductions before the deadline and
 remaining inventory must be inspected. This runner never starts a second connector.
 
+If status remains in warm-up, run this read-only diagnostic in a SECOND TERMINAL
+(it opens no exchange connection and sends no orders):
+
+```bash
+/opt/venv/bin/python -m scripts.diagnose_strategy6
+```
+
+It reads the most recent run log, replays only causal observations, and reports
+per-stock history span, actual price changes, book age and ready-basket coverage.
+The time window alone does not guarantee readiness: default rules require ten
+changed price intervals per eligible stock and 75% of the basket eligible. With
+eight stocks, fewer than six eligible stocks block ALL entries. The live status
+now distinguishes `warmup:history`, `warmup:price_changes`, `warmup:stale_book`,
+`warmup:invalid_book` and `warmup:basket_coverage`. Diagnose before changing gates.
+
 The deterministic entry hypothesis is persistent same-direction 5-second and
 20-second stock returns, matching basket direction, breadth at least 0.625,
 standardized slow-move strength at least 1.5, no strongly opposing depth
