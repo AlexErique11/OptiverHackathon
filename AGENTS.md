@@ -10,3 +10,4 @@
 - Work on a separate branch and strategy file. Preserve the working baseline.
 - Run `python -m unittest discover -s tests -v` and the offline demo after changing risk or strategy behavior.
 - State assumptions and evaluation limitations; synthetic or replay fills are not proof of real performance.
+- Keep AGENTS.md and CLAUDE.md identical. Whenever either file changes, apply the same change to the other file in the same commit.
