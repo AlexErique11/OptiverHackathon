@@ -1,0 +1,13 @@
+{
+  "note": "Confirmed hard net-position limit is -100 to +100 inclusive per instrument, including possible outstanding fills. No live runner reads this file. Fill remaining fields from the challenge. Save personal settings as challenge.local.json (ignored).",
+  "strategy": "inventory_maker",
+  "instruments": [],
+  "position_limit_per_instrument": 100,
+  "max_order_size": null,
+  "max_requests_per_second": null,
+  "fees": null,
+  "portfolio_exposure_limit": null,
+  "competition_end": null,
+  "end_inventory_rule": null,
+  "scoring": null
+}
