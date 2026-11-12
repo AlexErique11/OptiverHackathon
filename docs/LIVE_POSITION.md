@@ -16,6 +16,22 @@ Deployment in the supplied cloud terminal, from the repository root:
 /opt/venv/bin/python 'optiver_bot/strategies/market_maker#6.py' demo
 ```
 
+To close existing selected inventory BEFORE a clean new run, stop the active bot,
+then run (request cap is a local setting; use the verified allowance if known):
+
+```bash
+/opt/venv/bin/python 'optiver_bot/strategies/market_maker#6.py' flatten --live \
+  --instruments 'CRWV,MU' --max-requests 60
+```
+
+Flattening executes one-lot IOC reductions and waits for confirmation of that
+exact lot before another. It never requests new exposure. An unfilled/uncertain
+order can stop it without achieving flat; it does not repeatedly submit against
+a possibly stale position. Only `FLAT CONFIRMED:` indicates successful completion.
+Closing may incur spreads/slippage and realize losses; account PnL does NOT reset.
+Then use `run --live` WITHOUT `--manage-existing`; the new run's baseline is its
+starting PnL and the live guard requires all selected positions to be zero.
+
 Read `/home/workspace/AGENTS.md`, `/home/workspace/api_reference.md` and the unlocked
 challenge rules first. Confirm method/response fields against the supplied client.
 The startup preflight reads/hashes the two supplied reference files without printing

@@ -202,6 +202,46 @@ class AdapterTests(unittest.TestCase):
 
 
 class RunnerTests(unittest.TestCase):
+    def test_flatten_live_confirms_each_lot_and_ends_flat(self):
+        f = Fake()
+        f.pos['A'] = -3
+        with tempfile.TemporaryDirectory(dir='results/test-temp') as d, contextlib.redirect_stdout(io.StringIO()) as out:
+            code = main(['flatten', '--live', '--instruments', 'A', '--max-requests', '1000', '--log-dir', d],
+                        exchange_factory=lambda: f, clock=f.clock, sleep=f.sleep,
+                        wall=lambda: 1000000+f.now, preflight=lambda: {}, max_frames=20)
+        self.assertEqual(code, 0)
+        self.assertEqual(f.pos['A'], 0)
+        orders = [c for c in f.calls if c[0] == 'insert']
+        self.assertEqual(len(orders), 3)
+        self.assertTrue(all(c[1] == 'bid' and c[3] == 1 and c[4] == 'ioc' for c in orders))
+        self.assertIn('FLAT CONFIRMED:', out.getvalue())
+
+    def test_flatten_preview_never_changes_position(self):
+        f = Fake()
+        f.pos['A'] = 3
+        with tempfile.TemporaryDirectory(dir='results/test-temp') as d, contextlib.redirect_stdout(io.StringIO()):
+            code = main(['flatten', '--instruments', 'A', '--max-requests', '1000', '--log-dir', d],
+                        exchange_factory=lambda: f, clock=f.clock, sleep=f.sleep,
+                        wall=lambda: 1000000+f.now, preflight=lambda: {}, max_frames=20)
+        self.assertEqual(code, 0)
+        self.assertEqual(f.pos['A'], 3)
+        self.assertFalse(any(c[0] == 'insert' for c in f.calls))
+
+    def test_flatten_no_fill_does_not_repeat_or_report_flat(self):
+        f = Fake()
+        f.pos['A'] = -3
+        def unfilled(*a, **kw):
+            f.calls.append(('unfilled',))
+            return NS(success=True, order_id=123)
+        f.insert_order = unfilled
+        with tempfile.TemporaryDirectory(dir='results/test-temp') as d, contextlib.redirect_stdout(io.StringIO()) as out:
+            code = main(['flatten', '--live', '--instruments', 'A', '--max-requests', '1000', '--log-dir', d],
+                        exchange_factory=lambda: f, clock=f.clock, sleep=f.sleep,
+                        wall=lambda: 1000000+f.now, preflight=lambda: {}, max_frames=20)
+        self.assertEqual(code, 1)
+        self.assertEqual(f.calls.count(('unfilled',)), 1)
+        self.assertNotIn('FLAT CONFIRMED:', out.getvalue())
+
     def run_fake(self, live, jitter=False, inherited=False):
         f = Fake()
         f.fill = True

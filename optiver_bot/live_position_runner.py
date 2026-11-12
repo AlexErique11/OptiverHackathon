@@ -379,6 +379,67 @@ def cloud_preflight(root=Path('/home/workspace')):
     return hashes
 
 
+def flatten_loop(adapter, cfg, live, deadline, clock, sleep, path, max_frames=None):
+    """One-lot IOC reductions. Never repeat until that exact lot is confirmed.
+
+    A no-fill or unknown outcome ends on timeout/failure, not a blind retry that
+    could overshoot flat after delayed client updates. Exit 0 means verified flat.
+    """
+    gate = Executor(adapter, cfg, Budget(adapter.limiter.limit, adapter.limiter.window,
+                                         reserve=min(2, adapter.limiter.limit-1)))
+    adapter.entry_enabled = False
+    waiting = {}
+    rounds = 0
+    with path.open('x', encoding='utf-8') as log:
+        while clock() < deadline and (max_frames is None or rounds < max_frames):
+            views = {i: adapter.read(i) for i in adapter.ids}
+            remaining = {i: a.book.position for i, a in views.items() if a.book.position}
+            pending = bool(gate.pending or gate.cancel_pending or waiting)
+            if all(a.certain and not a.orders for a in views.values()) and not remaining and not pending:
+                print('FLAT CONFIRMED: all selected positions are zero; no outstanding or pending orders.')
+                return 0
+            outcomes = {}
+            for i, a in views.items():
+                if not a.certain:
+                    continue
+                if i in waiting:
+                    side, count = waiting[i]
+                    if adapter.filled[i][side] < count+1:
+                        outcomes[i] = 'waiting_for_exact_fill_confirmation'
+                        continue
+                    del waiting[i]
+                q = a.book.position
+                desired = ()
+                if q and strategy.valid_book(a.book, cfg):
+                    side = 'ask' if q > 0 else 'bid'
+                    price = a.book.bid if q > 0 else a.book.ask
+                    desired = (DesiredOrder(i, side, price, 1, 'ioc'),)
+                if live:
+                    side_index = 1 if q > 0 else 0
+                    before = adapter.filled[i][side_index]
+                    result = gate.reconcile(i, desired, 0, clock())
+                    outcomes[i] = result
+                    if result == 'insert_requested':
+                        waiting[i] = (side_index, before)
+                    if result in ('insert_unknown', 'cancel_unknown', 'unsafe'):
+                        print('Flatten stopped on uncertain outcome; inspect remaining positions. No blind retry.')
+                        return 1
+                else:
+                    outcomes[i] = 'preview_only'
+            log.write(json.dumps(dict(kind='flatten', positions=remaining, outcomes=outcomes,
+                                      equity=adapter.equity()))+'\n')
+            log.flush()
+            if rounds % 5 == 0 or not live:
+                print('Remaining positions:', remaining, outcomes)
+            if not live:
+                print('Preview only: no positions were closed. Use flatten --live to execute.')
+                return 0
+            rounds += 1
+            sleep(.2)
+    print('FLATTEN INCOMPLETE: timeout or unconfirmed fills. Inspect positions; do not start a fresh strategy.')
+    return 1
+
+
 def parser():
     p = argparse.ArgumentParser(description=__doc__)
     sub = p.add_subparsers(dest='command', required=True)
@@ -401,6 +462,19 @@ def parser():
     r.add_argument('--clip', type=int, default=1)
     r.add_argument('--max-age', type=float, default=1.)
     r.add_argument('--log-dir', default='logs/strategy6')
+    f = sub.add_parser('flatten', help='close selected positions one confirmed lot at a time')
+    f.add_argument('--live', action='store_true', help='execute reductions; otherwise preview only')
+    f.add_argument('--instruments', required=True)
+    f.add_argument('--max-requests', type=int, required=True)
+    f.add_argument('--request-window', type=float, default=1.)
+    f.add_argument('--max-order-size', type=int, default=100000)
+    f.add_argument('--duration-seconds', type=float, default=300)
+    f.add_argument('--max-age', type=float, default=1.)
+    f.add_argument('--log-dir', default='logs/strategy6')
+    # Reduction-only placeholders cannot enable entry: flatten_loop never requests
+    # a nonzero target and adapter.entry_enabled remains false.
+    f.set_defaults(cap=100, target=1, clip=1, cost_ticks=0., gross_limit=1.,
+                   cash_risk=1., loss_limit=1., manage_existing=True)
     return p
 
 
@@ -425,7 +499,7 @@ def main(argv=None, *, exchange_factory=None, clock=time.monotonic,
         ids = tuple(x.strip() for x in args.instruments.split(',') if x.strip())
         if not ids or len(set(ids)) != len(ids):
             raise ValueError('Nonempty unique instruments required')
-        if (not isfinite(args.duration_seconds) or args.duration_seconds <= cfg.no_entry_seconds
+        if (not isfinite(args.duration_seconds) or args.duration_seconds <= (0 if args.command == 'flatten' else cfg.no_entry_seconds)
                 or type(args.max_order_size) is not int or args.max_order_size < cfg.clip):
             raise ValueError('Invalid remaining duration/order limit')
         limiter = Limiter(args.max_requests, args.request_window, clock, sleep)
@@ -461,6 +535,8 @@ def main(argv=None, *, exchange_factory=None, clock=time.monotonic,
             print('Managing inherited inventory: reductions first; new positions wait for available slots.')
         print(f'Starting account PnL: {adapter.initial_equity:.2f}; positions: {adapter.initial}')
         adapter.deadline = deadline
+        if args.command == 'flatten':
+            return flatten_loop(adapter, cfg, args.live, deadline, clock, sleep, path, max_frames)
         engine = Controller(ids, cfg, deadline)
         gate = Executor(adapter, cfg, Budget(args.max_requests, args.request_window,
                                              reserve=min(2, args.max_requests-1)))
