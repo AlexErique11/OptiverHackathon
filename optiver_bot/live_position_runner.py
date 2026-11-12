@@ -385,6 +385,8 @@ def parser():
     sub.add_parser('demo', help='offline demo, no client import/connection')
     r = sub.add_parser('run', help='connect once; shadow unless --live')
     r.add_argument('--live', action='store_true')
+    r.add_argument('--manage-existing', action='store_true',
+                   help='explicitly allow reduction of inherited positions before new entries')
     r.add_argument('--instruments', required=True, help='comma-separated confirmed stock IDs')
     r.add_argument('--duration-seconds', type=float, required=True, help='time REMAINING until session end')
     r.add_argument('--cost-ticks', type=float, required=True, help='confirmed conservative round-trip cost estimate')
@@ -454,7 +456,9 @@ def main(argv=None, *, exchange_factory=None, clock=time.monotonic,
         if any(not callable(getattr(raw, n, None)) for n in required):
             raise ApiError('Supplied client is missing a required method')
         adapter = LiveAdapter(raw, cfg, ids, limiter, args.max_order_size, clock, wall,
-                              require_flat=args.live)
+                              require_flat=args.live and not args.manage_existing)
+        if args.live and args.manage_existing:
+            print('Managing inherited inventory: reductions first; new positions wait for available slots.')
         print(f'Starting account PnL: {adapter.initial_equity:.2f}; positions: {adapter.initial}')
         adapter.deadline = deadline
         engine = Controller(ids, cfg, deadline)

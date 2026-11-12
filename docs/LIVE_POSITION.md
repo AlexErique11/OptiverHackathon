@@ -27,6 +27,11 @@ inventory from previous strategies during warm-up. Shadow mode may observe selec
 inventory without trading it. Startup prints starting account PnL and positions;
 status prints both account PnL and change from that run's baseline. The loss-limit
 setting is a trigger relative to startup PnL, NOT a guaranteed maximum realized loss.
+An operator can explicitly choose `run --live --manage-existing` to start from
+current selected positions. This enables reduction of inherited inventory, not
+adoption of its unknown entry cost or a reset of account PnL. Existing shorts may
+be bought back immediately; their price risk and unwind costs still affect the
+run-relative PnL. New entries wait for portfolio slots and risk capacity.
 
 Set these shell variables to confirmed event settings and chosen cash-risk budgets
 (no example value here is an event rule). `DURATION_SECONDS` is the time REMAINING,

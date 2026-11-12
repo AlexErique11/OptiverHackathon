@@ -202,9 +202,11 @@ class AdapterTests(unittest.TestCase):
 
 
 class RunnerTests(unittest.TestCase):
-    def run_fake(self, live, jitter=False):
+    def run_fake(self, live, jitter=False, inherited=False):
         f = Fake()
         f.fill = True
+        if inherited:
+            f.pos['A'] = -3
         f.jitter = jitter
         with tempfile.TemporaryDirectory(dir='results/test-temp') as d:
             args = ['run', '--instruments', 'A', '--duration-seconds', '300',
@@ -213,6 +215,8 @@ class RunnerTests(unittest.TestCase):
                     '--log-dir', d]
             if live:
                 args.append('--live')
+            if inherited:
+                args.append('--manage-existing')
             factory_calls = []
             def factory():
                 factory_calls.append(1)
@@ -236,6 +240,13 @@ class RunnerTests(unittest.TestCase):
         f, rows = self.run_fake(False, jitter=True)
         self.assertEqual(sum(r.get('kind') == 'frame' for r in rows), 40)
         self.assertFalse(any(c[0] in ('insert', 'cancel') for c in f.calls))
+
+    def test_explicit_manage_existing_reduces_inherited_short(self):
+        f, rows = self.run_fake(True, inherited=True)
+        orders = [c for c in f.calls if c[0] == 'insert']
+        self.assertTrue(orders)
+        self.assertEqual(orders[0][1], 'bid')
+        self.assertEqual(rows[0]['starting_positions']['A'], -3)
 
     def test_diagnostic_identifies_location_without_private_message(self):
         try:
