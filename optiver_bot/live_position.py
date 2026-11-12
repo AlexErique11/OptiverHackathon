@@ -81,9 +81,8 @@ class Controller:
             raise ValueError('Time must strictly increase; create new controller on reset')
         if any(i not in self.ids or b.instrument_id != i for i, b in books.items()):
             raise ValueError('Universe/book identity mismatch')
-        # Require roughly one-second analysis frames; fast order handling is external.
-        if self.last is not None and now - self.last < 0.99:
-            raise ValueError('Supply at most one analysis frame per second')
+        # Network/limiter jitter changes completion spacing even when loop starts
+        # are paced. Accept forward times; features already use elapsed seconds.
         gap = self.last is not None and now - self.last > 2.5
         self.last = now
         if self.initial_equity is None:

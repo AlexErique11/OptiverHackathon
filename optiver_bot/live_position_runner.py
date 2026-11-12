@@ -15,6 +15,7 @@ from math import isfinite
 from pathlib import Path
 import signal
 import time
+import traceback
 import uuid
 
 from optiver_bot.live_position import Controller, News
@@ -27,6 +28,19 @@ strategy = import_module('optiver_bot.strategies.market_maker#6')
 
 class ApiError(RuntimeError):
     pass
+
+
+class NonFlatAccount(ApiError):
+    pass
+
+
+def error_location(exc):
+    """Identify the failing code without exposing client messages or locals."""
+    frames = traceback.extract_tb(exc.__traceback__)
+    if not frames:
+        return type(exc).__name__
+    frame = frames[-1]
+    return f'{type(exc).__name__} at {Path(frame.filename).name}:{frame.lineno} ({frame.name})'
 
 
 class Limiter:
@@ -93,7 +107,7 @@ class LiveAdapter:
     new trading after repeated unfilled replacements, instead of risking a breach.
     """
     def __init__(self, raw, cfg, instruments, limiter, max_order_size,
-                 clock=time.monotonic, wall=time.time):
+                 clock=time.monotonic, wall=time.time, require_flat=True):
         self.raw, self.cfg, self.ids = raw, cfg, tuple(instruments)
         self.limiter, self.max_size = limiter, max_order_size
         self.clock, self.wall = clock, wall
@@ -128,6 +142,8 @@ class LiveAdapter:
         if outside:
             raise ApiError('Unselected inventory exists; include those instruments for risk management')
         self.initial = {i: p.get(i, 0) for i in self.ids}
+        if require_flat and any(self.initial.values()):
+            raise NonFlatAccount('Live startup requires a flat account')
         self.ledger.update(self.initial)
         self.initial_equity = self.equity()
         self.entry_enabled = True
@@ -437,7 +453,9 @@ def main(argv=None, *, exchange_factory=None, clock=time.monotonic,
                     'insert_order', 'delete_order', 'is_connected')
         if any(not callable(getattr(raw, n, None)) for n in required):
             raise ApiError('Supplied client is missing a required method')
-        adapter = LiveAdapter(raw, cfg, ids, limiter, args.max_order_size, clock, wall)
+        adapter = LiveAdapter(raw, cfg, ids, limiter, args.max_order_size, clock, wall,
+                              require_flat=args.live)
+        print(f'Starting account PnL: {adapter.initial_equity:.2f}; positions: {adapter.initial}')
         adapter.deadline = deadline
         engine = Controller(ids, cfg, deadline)
         gate = Executor(adapter, cfg, Budget(args.max_requests, args.request_window,
@@ -445,7 +463,9 @@ def main(argv=None, *, exchange_factory=None, clock=time.monotonic,
         frames = 0
         with path.open('x', encoding='utf-8') as log:
             log.write(json.dumps(dict(kind='settings', config=asdict(cfg), references=refs,
-                                      live=args.live, instruments=ids, duration=args.duration_seconds))+'\n')
+                                      live=args.live, instruments=ids, duration=args.duration_seconds,
+                                      starting_equity=adapter.initial_equity,
+                                      starting_positions=adapter.initial))+'\n')
             while clock() < deadline and (max_frames is None or frames < max_frames):
                 begin = clock()
                 if not limiter.call(raw.is_connected):
@@ -497,15 +517,20 @@ def main(argv=None, *, exchange_factory=None, clock=time.monotonic,
                 log.write(json.dumps(row)+'\n')
                 log.flush()
                 if frames % 5 == 0:
-                    print(f'{now-start:.0f}s', [(d.instrument, d.reason, d.target) for d in decisions])
+                    print(f'{now-start:.0f}s PnL={equity:.2f} change={equity-adapter.initial_equity:+.2f}',
+                          [(d.instrument, d.reason, d.target) for d in decisions])
                 frames += 1
-                sleep(max(0, 1-(clock()-begin)))
+                sleep(max(.2, 1-(clock()-begin)))
         return 0
     except KeyboardInterrupt:
         print('Interrupted; cancelling outstanding orders. Filled inventory may remain.')
         return 130
+    except NonFlatAccount:
+        print('LIVE STARTUP REFUSED: existing positions detected. No orders were submitted. '
+              'Inspect and manage existing inventory separately; do not restart to bypass this guard.')
+        return 1
     except Exception as exc:
-        print(f'Stopped safely: {type(exc).__name__}. Inspect account state; inventory may remain.')
+        print(f'Runner stopped: {error_location(exc)}. Inspect account state; inventory may remain.')
         return 1
     finally:
         if old_term is not None:

@@ -31,6 +31,21 @@ def warm(cfg=None, negative=False):
 
 
 class SignalTests(unittest.TestCase):
+    def test_normal_network_jitter_does_not_crash_analysis(self):
+        e = Controller(('A',), config(), 1200)
+        for n in range(40):
+            now = n + (0.2 if n % 2 else 0)
+            result = e.update(now, {'A': book(n)}, equity=0,
+                              account_ok=True, feed_ok=True)
+        self.assertTrue(result[0].features.ready)
+
+    def test_duplicate_or_backward_time_still_fails(self):
+        e = Controller(('A',), config(), 1200)
+        e.update(1, {'A': book()}, equity=0, account_ok=True)
+        for now in (1, 0):
+            with self.assertRaises(ValueError):
+                e.update(now, {'A': book()}, equity=0, account_ok=True)
+
     def test_long_and_short_after_warmup(self):
         for negative, sign in ((False, 1), (True, -1)):
             _, d = warm(negative=negative)

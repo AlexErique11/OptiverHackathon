@@ -21,8 +21,12 @@ challenge rules first. Confirm method/response fields against the supplied clien
 The startup preflight reads/hashes the two supplied reference files without printing
 their contents; it checks their presence, NOT that event semantics were reviewed.
 Stop the previous team bot before connecting even in shadow mode. Existing orders
-at startup or inventory outside the selected universe refuse takeover. Selected
-inherited inventory is reduction-only; it is not given a fabricated cost basis.
+at startup or inventory outside the selected universe refuse takeover. LIVE mode
+also refuses startup with ANY selected position. It must not silently unwind
+inventory from previous strategies during warm-up. Shadow mode may observe selected
+inventory without trading it. Startup prints starting account PnL and positions;
+status prints both account PnL and change from that run's baseline. The loss-limit
+setting is a trigger relative to startup PnL, NOT a guaranteed maximum realized loss.
 
 Set these shell variables to confirmed event settings and chosen cash-risk budgets
 (no example value here is an event rule). `DURATION_SECONDS` is the time REMAINING,
@@ -57,6 +61,10 @@ rate-limited. If this exceeds the verified budget, frames slow down; gaps over
 smaller confirmed stock universe instead of exceeding the request allowance or
 discarding risk checks. Irregular valid observations use actual elapsed time,
 time-based return windows and volatility normalized per square-root second.
+Normal sub-second variation in frame completion time is accepted; it is not a
+reason to raise ValueError. The main loop always sleeps at least 0.2 seconds.
+Failures identify exception type and source location without printing client
+exception text, credentials or locals.
 
 The independent lifetime reservation backstop counts every submitted quantity
 until confirmed opposite fills replenish capacity. Cancellation alone does NOT

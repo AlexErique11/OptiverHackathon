@@ -8,7 +8,7 @@ from types import SimpleNamespace as NS
 import unittest
 
 from optiver_bot.live_position_runner import (
-    ApiError, Limiter, LiveAdapter, age_seconds, cloud_preflight, main, strategy,
+    ApiError, Limiter, LiveAdapter, age_seconds, cloud_preflight, main, strategy, error_location,
 )
 from optiver_bot.models import DesiredOrder
 
@@ -22,6 +22,8 @@ class Fake:
         self.calls = []
         self.fill = False
         self.n = 0
+        self.jitter = False
+        self.pnl_calls = 0
 
     def clock(self):
         return self.now
@@ -45,6 +47,9 @@ class Fake:
         return dict(self.pos)
 
     def get_pnl(self):
+        self.pnl_calls += 1
+        if self.jitter and self.pnl_calls % 2:
+            self.now += .2
         return 0.
 
     def get_outstanding_orders(self, i):
@@ -156,6 +161,22 @@ class AdapterTests(unittest.TestCase):
             with self.assertRaises(ApiError):
                 adapter(f)
 
+    def test_selected_inventory_refuses_live_startup_without_orders(self):
+        f = Fake()
+        f.pos['A'] = 3
+        with self.assertRaises(ApiError):
+            adapter(f)
+        self.assertFalse(any(c[0] in ('insert', 'cancel') for c in f.calls))
+
+    def test_shadow_can_observe_inherited_inventory_without_mutating_it(self):
+        f = Fake()
+        f.pos['A'] = 3
+        a = LiveAdapter(f, config(), ('A',), Limiter(1000, clock=f.clock, sleep=f.sleep),
+                        1, f.clock, lambda: 1000000+f.now, require_flat=False)
+        self.assertEqual(a.initial['A'], 3)
+        self.assertEqual(f.pos['A'], 3)
+        self.assertFalse(f.calls)
+
     def test_limiter_counts_actual_calls(self):
         f = Fake()
         limit = Limiter(2, clock=f.clock, sleep=f.sleep)
@@ -181,9 +202,10 @@ class AdapterTests(unittest.TestCase):
 
 
 class RunnerTests(unittest.TestCase):
-    def run_fake(self, live):
+    def run_fake(self, live, jitter=False):
         f = Fake()
         f.fill = True
+        f.jitter = jitter
         with tempfile.TemporaryDirectory(dir='results/test-temp') as d:
             args = ['run', '--instruments', 'A', '--duration-seconds', '300',
                     '--cost-ticks', '.1', '--max-requests', '1000', '--max-order-size', '1',
@@ -209,6 +231,19 @@ class RunnerTests(unittest.TestCase):
         f, rows = self.run_fake(False)
         self.assertFalse(any(c[0] in ('insert', 'cancel') for c in f.calls))
         self.assertTrue(any(d['target'] for r in rows if r.get('kind') == 'frame' for d in r['decisions']))
+
+    def test_shadow_survives_variable_api_latency(self):
+        f, rows = self.run_fake(False, jitter=True)
+        self.assertEqual(sum(r.get('kind') == 'frame' for r in rows), 40)
+        self.assertFalse(any(c[0] in ('insert', 'cancel') for c in f.calls))
+
+    def test_diagnostic_identifies_location_without_private_message(self):
+        try:
+            raise ValueError('injected-password-must-not-be-printed')
+        except ValueError as exc:
+            diagnostic = error_location(exc)
+        self.assertIn('ValueError at test_live_position_runner.py:', diagnostic)
+        self.assertNotIn('injected-password', diagnostic)
 
     def test_live_opens_target_and_tracks_actual_fill_basis(self):
         f, rows = self.run_fake(True)
